@@ -28,7 +28,7 @@ Proiectul urmează o arhitectură stratificată (similară cu MVC) cu următoare
 
 1. Asigură-te că ai instalat un server MySQL (de exemplu, folosind XAMPP sau MySQL Community Server).
 2. Creează o bază de date numită `catalog`.
-3. Importă schema bazei de date. (De obicei, dintr-un fișier `schema.sql`. Dacă ai șters fișierul, va trebui să recreezi manual tabelele `utilizatori`, `studenti`, `discipline`, `note` cu structura corespunzătoare, inclusiv coloanele și cheile primare/externe).
+3. Importă schema bazei de date.
 
 ## Rularea Aplicației
 

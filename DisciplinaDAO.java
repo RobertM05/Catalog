@@ -2,86 +2,84 @@ package org.example.dao;
 
 import org.example.model.Disciplina;
 import org.example.util.DatabaseConnection;
+import org.example.util.TransactionManager;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class DisciplinaDAO {
+public class DisciplinaDAO extends BaseDAO<Disciplina> {
 
     public void adaugaDisciplina(Disciplina disciplina) throws SQLException {
-        String sql = "INSERT INTO discipline (id, nume, acronim, tip_evaluare) VALUES (?, ?, ?, ?)";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, disciplina.getId().toString());
+        logger.debug("Adaugare disciplina: {}", disciplina.getNume());
+        String sql = "INSERT INTO discipline (id, nume, acronim, tip_evaluare) VALUES (?,?,?,?)";
+        
+        executeUpdate(sql, stmt -> {
+            setUUID(stmt, 1, disciplina.getId());
             stmt.setString(2, disciplina.getNume());
             stmt.setString(3, disciplina.getAcronim());
             stmt.setString(4, disciplina.getTipEvaluare());
-            stmt.executeUpdate();
-        }
-    }
-
-    public List<Disciplina> toateDisciplinele() throws SQLException {
-        List<Disciplina> discipline = new ArrayList<>();
-        String sql = "SELECT * FROM discipline";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                UUID id = UUID.fromString(rs.getString("id"));
-                String nume = rs.getString("nume");
-                String acronim = rs.getString("acronim");
-                String tipEvaluare = rs.getString("tip_evaluare");
-
-                Disciplina d = new Disciplina(id, nume, acronim, tipEvaluare);
-                discipline.add(d);
-            }
-        }
-        return discipline;
+        });
+        logger.info("Disciplina adaugata cu succes: {}", disciplina.getId());
     }
 
     public void actualizeazaDisciplina(Disciplina disciplina) throws SQLException {
         String sql = "UPDATE discipline SET nume = ?, acronim = ?, tip_evaluare = ? WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        executeUpdate(sql, stmt -> {
             stmt.setString(1, disciplina.getNume());
             stmt.setString(2, disciplina.getAcronim());
             stmt.setString(3, disciplina.getTipEvaluare());
-            stmt.setString(4, disciplina.getId().toString());
-            stmt.executeUpdate();
-        }
+            setUUID(stmt, 4, disciplina.getId());
+        });
+        logger.info("Disciplina actualizata cu succes: {}", disciplina.getId());
     }
 
     public void stergeDisciplina(UUID id) throws SQLException {
-        String sql = "DELETE FROM discipline WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        logger.debug("Stergere disciplina cu ID: {}", id);
+        
+        TransactionManager.executeInTransaction(conn -> {
+            try (PreparedStatement stmt = conn.prepareStatement("DELETE FROM note WHERE id_disciplina = ?")) {
+                setUUID(stmt, 1, id);
+                int noteSterse = stmt.executeUpdate();
+                logger.info("Au fost sterse {} note asociate disciplinei {}", noteSterse, id);
+            }
 
-            stmt.setString(1, id.toString());
-            stmt.executeUpdate();
-        }
+            try (PreparedStatement stmt = conn.prepareStatement("DELETE FROM discipline WHERE id = ?")) {
+                setUUID(stmt, 1, id);
+                int result = stmt.executeUpdate();
+                if (result == 0) {
+                    throw new SQLException("Disciplina cu ID-ul " + id + " nu a fost gasita");
+                }
+                logger.info("Disciplina {} a fost stearsa cu succes", id);
+            }
+            return null;
+        });
+    }
+
+    public List<Disciplina> getAllDiscipline() throws SQLException {
+        logger.debug("Selectare toate disciplinele");
+        return executeQueryList("SELECT * FROM discipline ORDER BY nume", stmt -> {});
     }
 
     public Disciplina getDisciplinaDupaId(UUID id) throws SQLException {
-        String sql = "SELECT * FROM discipline WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        logger.debug("Cautare disciplina cu ID: {}", id);
+        return executeQuerySingle(
+            "SELECT * FROM discipline WHERE id = ?",
+            stmt -> setUUID(stmt, 1, id)
+        ).orElse(null);
+    }
 
-            stmt.setString(1, id.toString());
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String nume = rs.getString("nume");
-                    String acronim = rs.getString("acronim");
-                    String tipEvaluare = rs.getString("tip_evaluare");
-                    return new Disciplina(id, nume, acronim, tipEvaluare);
-                }
-            }
-        }
-        return null;
+    @Override
+    protected Disciplina extractFromResultSet(ResultSet rs) throws SQLException {
+        return new Disciplina(
+            getUUID(rs, "id"),
+            rs.getString("nume"),
+            rs.getString("acronim"),
+            rs.getString("tip_evaluare")
+        );
     }
 }
+
+
+
